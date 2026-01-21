@@ -108,6 +108,7 @@ def generate_voice_design(text, language, voice_description):
             text=text.strip(),
             language=language,
             instruct=voice_description.strip(),
+            non_streaming_mode=True,
             max_new_tokens=2048,
         )
         return (sr, wavs[0]), "Voice design generation completed successfully!"
@@ -158,6 +159,7 @@ def generate_custom_voice(text, language, speaker, instruct, model_size):
             language=language,
             speaker=speaker.lower().replace(" ", "_"),
             instruct=instruct.strip() if instruct else None,
+            non_streaming_mode=True,
             max_new_tokens=2048,
         )
         return (sr, wavs[0]), "Generation completed successfully!"
@@ -291,13 +293,13 @@ Built with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) by Alibaba Qwen Team
                             tts_language = gr.Dropdown(
                                 label="Language",
                                 choices=LANGUAGES,
-                                value="Auto",
+                                value="English",
                                 interactive=True,
                             )
                             tts_speaker = gr.Dropdown(
                                 label="Speaker",
                                 choices=SPEAKERS,
-                                value="Vivian",
+                                value="Ryan",
                                 interactive=True,
                             )
                         with gr.Row():
