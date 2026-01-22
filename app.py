@@ -1,7 +1,8 @@
 # coding=utf-8
 # Qwen3-TTS Gradio Demo for HuggingFace Spaces with Zero GPU
 # Supports: Voice Design, Voice Clone (Base), TTS (CustomVoice)
-
+import subprocess
+subprocess.run('pip install flash-attn --no-build-isolation', env={'FLASH_ATTENTION_SKIP_CUDA_BUILD': "TRUE"}, shell=True)
 import os
 import spaces
 import gradio as gr
@@ -37,6 +38,7 @@ def get_model(model_type: str, model_size: str):
             device_map="cuda",
             dtype=torch.bfloat16,
             token=HF_TOKEN,
+            attn_implementation="flash_attention_2",
         )
     return loaded_models[key]
 
