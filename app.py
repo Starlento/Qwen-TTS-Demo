@@ -2,7 +2,7 @@
 # Qwen3-TTS Gradio Demo for HuggingFace Spaces with Zero GPU
 # Supports: Voice Design, Voice Clone (Base), TTS (CustomVoice)
 import subprocess
-subprocess.run('pip install flash-attn --no-build-isolation', env={'FLASH_ATTENTION_SKIP_CUDA_BUILD': "TRUE"}, shell=True)
+subprocess.run('pip install flash-attn --no-build-isolation', shell=True)
 import os
 import spaces
 import gradio as gr
