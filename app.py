@@ -41,7 +41,7 @@ voice_design_model = Qwen3TTSModel.from_pretrained(
     device_map="cuda",
     dtype=torch.bfloat16,
     token=HF_TOKEN,
-    attn_implementation="kernels-community/flash-attn3",
+    #attn_implementation="kernels-community/flash-attn3",
 )
 
 # Base (Voice Clone) models - both sizes
@@ -51,7 +51,7 @@ base_model_0_6b = Qwen3TTSModel.from_pretrained(
     device_map="cuda",
     dtype=torch.bfloat16,
     token=HF_TOKEN,
-    attn_implementation="kernels-community/flash-attn3",
+    #attn_implementation="kernels-community/flash-attn3",
 )
 
 print("Loading Base 1.7B model...")
@@ -60,7 +60,7 @@ base_model_1_7b = Qwen3TTSModel.from_pretrained(
     device_map="cuda",
     dtype=torch.bfloat16,
     token=HF_TOKEN,
-    attn_implementation="kernels-community/flash-attn3",
+    #attn_implementation="kernels-community/flash-attn3",
 )
 
 # CustomVoice models - both sizes
