@@ -8,17 +8,20 @@ import spaces
 import gradio as gr
 import numpy as np
 import torch
-from huggingface_hub import snapshot_download
+from huggingface_hub import snapshot_download, login
+from qwen_tts import Qwen3TTSModel
 
-from huggingface_hub import login
 HF_TOKEN = os.environ.get('HF_TOKEN')
 login(token=HF_TOKEN)
 
-# Global model holders - keyed by (model_type, model_size)
-loaded_models = {}
-
 # Model size options
 MODEL_SIZES = ["0.6B", "1.7B"]
+
+# Speaker and language choices for CustomVoice model
+SPEAKERS = [
+    "Aiden", "Dylan", "Eric", "Ono_anna", "Ryan", "Serena", "Sohee", "Uncle_fu", "Vivian"
+]
+LANGUAGES = ["Auto", "Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish", "Portuguese", "Russian"]
 
 
 def get_model_path(model_type: str, model_size: str) -> str:
@@ -26,21 +29,73 @@ def get_model_path(model_type: str, model_size: str) -> str:
     return snapshot_download(f"Qwen/Qwen3-TTS-12Hz-{model_size}-{model_type}")
 
 
-def get_model(model_type: str, model_size: str):
-    """Get or load a model by type and size."""
-    global loaded_models
-    key = (model_type, model_size)
-    if key not in loaded_models:
-        from qwen_tts import Qwen3TTSModel
-        model_path = get_model_path(model_type, model_size)
-        loaded_models[key] = Qwen3TTSModel.from_pretrained(
-            model_path,
-            device_map="cuda",
-            dtype=torch.bfloat16,
-            token=HF_TOKEN,
-#           attn_implementation="flash_attention_2",
-        )
-    return loaded_models[key]
+# ============================================================================
+# GLOBAL MODEL LOADING - Load all models at startup
+# ============================================================================
+print("Loading all models to CUDA...")
+
+# Voice Design model (1.7B only)
+print("Loading VoiceDesign 1.7B model...")
+voice_design_model = Qwen3TTSModel.from_pretrained(
+    get_model_path("VoiceDesign", "1.7B"),
+    device_map="cuda",
+    dtype=torch.bfloat16,
+    token=HF_TOKEN,
+    attn_implementation="kernels-community/flash-attn3",
+)
+
+# Base (Voice Clone) models - both sizes
+print("Loading Base 0.6B model...")
+base_model_0_6b = Qwen3TTSModel.from_pretrained(
+    get_model_path("Base", "0.6B"),
+    device_map="cuda",
+    dtype=torch.bfloat16,
+    token=HF_TOKEN,
+    attn_implementation="kernels-community/flash-attn3",
+)
+
+print("Loading Base 1.7B model...")
+base_model_1_7b = Qwen3TTSModel.from_pretrained(
+    get_model_path("Base", "1.7B"),
+    device_map="cuda",
+    dtype=torch.bfloat16,
+    token=HF_TOKEN,
+    attn_implementation="kernels-community/flash-attn3",
+)
+
+# CustomVoice models - both sizes
+print("Loading CustomVoice 0.6B model...")
+custom_voice_model_0_6b = Qwen3TTSModel.from_pretrained(
+    get_model_path("CustomVoice", "0.6B"),
+    device_map="cuda",
+    dtype=torch.bfloat16,
+    token=HF_TOKEN,
+    attn_implementation="kernels-community/flash-attn3",
+)
+
+print("Loading CustomVoice 1.7B model...")
+custom_voice_model_1_7b = Qwen3TTSModel.from_pretrained(
+    get_model_path("CustomVoice", "1.7B"),
+    device_map="cuda",
+    dtype=torch.bfloat16,
+    token=HF_TOKEN,
+    attn_implementation="kernels-community/flash-attn3",
+)
+
+print("All models loaded successfully!")
+
+# Model lookup dictionaries for easy access
+BASE_MODELS = {
+    "0.6B": base_model_0_6b,
+    "1.7B": base_model_1_7b,
+}
+
+CUSTOM_VOICE_MODELS = {
+    "0.6B": custom_voice_model_0_6b,
+    "1.7B": custom_voice_model_1_7b,
+}
+
+# ============================================================================
 
 
 def _normalize_audio(wav, eps=1e-12, clip=True):
@@ -89,15 +144,8 @@ def _audio_to_tuple(audio):
     return None
 
 
-# Speaker and language choices for CustomVoice model
-SPEAKERS = [
-    "Aiden", "Dylan", "Eric", "Ono_anna", "Ryan", "Serena", "Sohee", "Uncle_fu", "Vivian"
-]
-LANGUAGES = ["Auto", "Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish", "Portuguese", "Russian"]
-
-
 @spaces.GPU(duration=60)
-def generate_voice_design(text, language, voice_description):
+def generate_voice_design(text, language, voice_description, progress=gr.Progress(track_tqdm=True)):
     """Generate speech using Voice Design model (1.7B only)."""
     if not text or not text.strip():
         return None, "Error: Text is required."
@@ -105,8 +153,7 @@ def generate_voice_design(text, language, voice_description):
         return None, "Error: Voice description is required."
 
     try:
-        tts = get_model("VoiceDesign", "1.7B")
-        wavs, sr = tts.generate_voice_design(
+        wavs, sr = voice_design_model.generate_voice_design(
             text=text.strip(),
             language=language,
             instruct=voice_description.strip(),
@@ -119,7 +166,7 @@ def generate_voice_design(text, language, voice_description):
 
 
 @spaces.GPU(duration=60)
-def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector_only, model_size):
+def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector_only, model_size, progress=gr.Progress(track_tqdm=True)):
     """Generate speech using Base (Voice Clone) model."""
     if not target_text or not target_text.strip():
         return None, "Error: Target text is required."
@@ -132,7 +179,7 @@ def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector
         return None, "Error: Reference text is required when 'Use x-vector only' is not enabled."
 
     try:
-        tts = get_model("Base", model_size)
+        tts = BASE_MODELS[model_size]
         wavs, sr = tts.generate_voice_clone(
             text=target_text.strip(),
             language=language,
@@ -147,7 +194,7 @@ def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector
 
 
 @spaces.GPU(duration=60)
-def generate_custom_voice(text, language, speaker, instruct, model_size):
+def generate_custom_voice(text, language, speaker, instruct, model_size, progress=gr.Progress(track_tqdm=True)):
     """Generate speech using CustomVoice model."""
     if not text or not text.strip():
         return None, "Error: Text is required."
@@ -155,7 +202,7 @@ def generate_custom_voice(text, language, speaker, instruct, model_size):
         return None, "Error: Speaker is required."
 
     try:
-        tts = get_model("CustomVoice", model_size)
+        tts = CUSTOM_VOICE_MODELS[model_size]
         wavs, sr = tts.generate_custom_voice(
             text=text.strip(),
             language=language,
@@ -184,12 +231,10 @@ def build_ui():
         gr.Markdown(
             """
 # Qwen3-TTS Demo
-
 A unified Text-to-Speech demo featuring three powerful modes:
 - **Voice Design**: Create custom voices using natural language descriptions
 - **Voice Clone (Base)**: Clone any voice from a reference audio
 - **TTS (CustomVoice)**: Generate speech with predefined speakers and optional style instructions
-
 Built with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) by Alibaba Qwen Team.
 """
         )
@@ -331,7 +376,6 @@ Built with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) by Alibaba Qwen Team
         gr.Markdown(
             """
 ---
-
 **Note**: This demo uses HuggingFace Spaces Zero GPU. Each generation has a time limit.
 For longer texts, please split them into smaller segments.
 """
