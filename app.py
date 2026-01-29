@@ -1,8 +1,8 @@
 # coding=utf-8
 # Qwen3-TTS Gradio Demo for HuggingFace Spaces with Zero GPU
 # Supports: Voice Design, Voice Clone (Base), TTS (CustomVoice)
-#import subprocess
-#subprocess.run('pip install flash-attn==2.7.4.post1', shell=True)
+# Optimized: Load models on demand to save GPU memory
+
 import os
 import spaces
 import gradio as gr
@@ -30,73 +30,96 @@ def get_model_path(model_type: str, model_size: str) -> str:
 
 
 # ============================================================================
-# GLOBAL MODEL LOADING - Load all models at startup
-# ============================================================================
-print("Loading all models to CUDA...")
-
-# Voice Design model (1.7B only)
-print("Loading VoiceDesign 1.7B model...")
-voice_design_model = Qwen3TTSModel.from_pretrained(
-    get_model_path("VoiceDesign", "1.7B"),
-    device_map="cuda",
-    dtype=torch.bfloat16,
-    token=HF_TOKEN,
-    #attn_implementation="kernels-community/flash-attn3",
-)
-
-# Base (Voice Clone) models - both sizes
-print("Loading Base 0.6B model...")
-base_model_0_6b = Qwen3TTSModel.from_pretrained(
-    get_model_path("Base", "0.6B"),
-    device_map="cuda",
-    dtype=torch.bfloat16,
-    token=HF_TOKEN,
-    #attn_implementation="kernels-community/flash-attn3",
-)
-
-print("Loading Base 1.7B model...")
-base_model_1_7b = Qwen3TTSModel.from_pretrained(
-    get_model_path("Base", "1.7B"),
-    device_map="cuda",
-    dtype=torch.bfloat16,
-    token=HF_TOKEN,
-    #attn_implementation="kernels-community/flash-attn3",
-)
-
-# CustomVoice models - both sizes
-print("Loading CustomVoice 0.6B model...")
-custom_voice_model_0_6b = Qwen3TTSModel.from_pretrained(
-    get_model_path("CustomVoice", "0.6B"),
-    device_map="cuda",
-    dtype=torch.bfloat16,
-    token=HF_TOKEN,
-    attn_implementation="kernels-community/flash-attn3",
-)
-
-print("Loading CustomVoice 1.7B model...")
-custom_voice_model_1_7b = Qwen3TTSModel.from_pretrained(
-    get_model_path("CustomVoice", "1.7B"),
-    device_map="cuda",
-    dtype=torch.bfloat16,
-    token=HF_TOKEN,
-    attn_implementation="kernels-community/flash-attn3",
-)
-
-print("All models loaded successfully!")
-
-# Model lookup dictionaries for easy access
-BASE_MODELS = {
-    "0.6B": base_model_0_6b,
-    "1.7B": base_model_1_7b,
-}
-
-CUSTOM_VOICE_MODELS = {
-    "0.6B": custom_voice_model_0_6b,
-    "1.7B": custom_voice_model_1_7b,
-}
-
+# ON-DEMAND MODEL LOADING - Load models only when needed
 # ============================================================================
 
+# Global model cache
+_model_cache = {}
+_current_model_key = None
+
+
+def print_gpu_memory(msg=""):
+    """Print current GPU memory usage."""
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated() / 1e9
+        reserved = torch.cuda.memory_reserved() / 1e9
+        print(f"[GPU Memory {msg}] Allocated: {allocated:.2f}GB, Reserved: {reserved:.2f}GB")
+
+
+def clear_model_cache():
+    """Clear all cached models and free GPU memory."""
+    global _model_cache, _current_model_key
+    
+    for key in list(_model_cache.keys()):
+        print(f"Unloading model: {key}")
+        del _model_cache[key]
+    
+    _model_cache = {}
+    _current_model_key = None
+    
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    
+    import gc
+    gc.collect()
+    
+    print_gpu_memory("after clearing cache")
+
+
+def get_model(model_type: str, model_size: str):
+    """
+    Load model on demand with caching.
+    Only keeps one model in memory at a time to save GPU memory.
+    
+    Args:
+        model_type: "VoiceDesign", "Base", or "CustomVoice"
+        model_size: "0.6B" or "1.7B"
+    
+    Returns:
+        Loaded model
+    """
+    global _model_cache, _current_model_key
+    
+    cache_key = f"{model_type}_{model_size}"
+    
+    # If requested model is already loaded, return it
+    if cache_key in _model_cache:
+        print(f"Using cached model: {cache_key}")
+        return _model_cache[cache_key]
+    
+    # Clear existing models to free GPU memory
+    if _model_cache:
+        print(f"Switching from {_current_model_key} to {cache_key}")
+        clear_model_cache()
+    
+    print_gpu_memory("before loading")
+    
+    # Load the requested model
+    print(f"Loading {model_type} {model_size} model...")
+    model_path = get_model_path(model_type, model_size)
+    
+    model = Qwen3TTSModel.from_pretrained(
+        model_path,
+        device_map="cuda",
+        dtype=torch.bfloat16,
+        token=HF_TOKEN,
+        # Note: Remove flash-attn if you encounter compatibility issues
+        # attn_implementation="kernels-community/flash-attn3",
+    )
+    
+    _model_cache[cache_key] = model
+    _current_model_key = cache_key
+    
+    print_gpu_memory("after loading")
+    print(f"Model {cache_key} loaded successfully!")
+    
+    return model
+
+
+# ============================================================================
+# Audio utility functions
+# ============================================================================
 
 def _normalize_audio(wav, eps=1e-12, clip=True):
     """Normalize audio to float32 in [-1, 1] range."""
@@ -144,7 +167,11 @@ def _audio_to_tuple(audio):
     return None
 
 
-@spaces.GPU(duration=60)
+# ============================================================================
+# Generation functions
+# ============================================================================
+
+@spaces.GPU(duration=120)  # Increased duration for model loading + generation
 def generate_voice_design(text, language, voice_description, progress=gr.Progress(track_tqdm=True)):
     """Generate speech using Voice Design model (1.7B only)."""
     if not text or not text.strip():
@@ -153,7 +180,10 @@ def generate_voice_design(text, language, voice_description, progress=gr.Progres
         return None, "Error: Voice description is required."
 
     try:
-        wavs, sr = voice_design_model.generate_voice_design(
+        # Load model on demand
+        model = get_model("VoiceDesign", "1.7B")
+        
+        wavs, sr = model.generate_voice_design(
             text=text.strip(),
             language=language,
             instruct=voice_description.strip(),
@@ -162,10 +192,12 @@ def generate_voice_design(text, language, voice_description, progress=gr.Progres
         )
         return (sr, wavs[0]), "Voice design generation completed successfully!"
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return None, f"Error: {type(e).__name__}: {e}"
 
 
-@spaces.GPU(duration=60)
+@spaces.GPU(duration=120)  # Increased duration for model loading + generation
 def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector_only, model_size, progress=gr.Progress(track_tqdm=True)):
     """Generate speech using Base (Voice Clone) model."""
     if not target_text or not target_text.strip():
@@ -179,8 +211,10 @@ def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector
         return None, "Error: Reference text is required when 'Use x-vector only' is not enabled."
 
     try:
-        tts = BASE_MODELS[model_size]
-        wavs, sr = tts.generate_voice_clone(
+        # Load model on demand
+        model = get_model("Base", model_size)
+        
+        wavs, sr = model.generate_voice_clone(
             text=target_text.strip(),
             language=language,
             ref_audio=audio_tuple,
@@ -190,10 +224,12 @@ def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector
         )
         return (sr, wavs[0]), "Voice clone generation completed successfully!"
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return None, f"Error: {type(e).__name__}: {e}"
 
 
-@spaces.GPU(duration=60)
+@spaces.GPU(duration=120)  # Increased duration for model loading + generation
 def generate_custom_voice(text, language, speaker, instruct, model_size, progress=gr.Progress(track_tqdm=True)):
     """Generate speech using CustomVoice model."""
     if not text or not text.strip():
@@ -202,8 +238,10 @@ def generate_custom_voice(text, language, speaker, instruct, model_size, progres
         return None, "Error: Speaker is required."
 
     try:
-        tts = CUSTOM_VOICE_MODELS[model_size]
-        wavs, sr = tts.generate_custom_voice(
+        # Load model on demand
+        model = get_model("CustomVoice", model_size)
+        
+        wavs, sr = model.generate_custom_voice(
             text=text.strip(),
             language=language,
             speaker=speaker.lower().replace(" ", "_"),
@@ -213,10 +251,15 @@ def generate_custom_voice(text, language, speaker, instruct, model_size, progres
         )
         return (sr, wavs[0]), "Generation completed successfully!"
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return None, f"Error: {type(e).__name__}: {e}"
 
 
-# Build Gradio UI
+# ============================================================================
+# Gradio UI
+# ============================================================================
+
 def build_ui():
     theme = gr.themes.Soft(
         font=[gr.themes.GoogleFont("Source Sans Pro"), "Arial", "sans-serif"],
@@ -235,7 +278,10 @@ A unified Text-to-Speech demo featuring three powerful modes:
 - **Voice Design**: Create custom voices using natural language descriptions
 - **Voice Clone (Base)**: Clone any voice from a reference audio
 - **TTS (CustomVoice)**: Generate speech with predefined speakers and optional style instructions
+
 Built with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) by Alibaba Qwen Team.
+
+> **Note**: Models are loaded on-demand to optimize GPU memory usage. First generation in each mode may take longer due to model loading.
 """
         )
 
@@ -378,6 +424,9 @@ Built with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) by Alibaba Qwen Team
 ---
 **Note**: This demo uses HuggingFace Spaces Zero GPU. Each generation has a time limit.
 For longer texts, please split them into smaller segments.
+
+**Memory Optimization**: Models are loaded on-demand and only one model is kept in memory at a time.
+Switching between different models/sizes will automatically unload the previous model.
 """
         )
 
