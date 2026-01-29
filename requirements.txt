@@ -1,4 +1,5 @@
 # Qwen3-TTS Dependencies for HuggingFace Spaces
+torch==2.8.0
 transformers==4.57.3
 accelerate==1.12.0
 einops
@@ -11,3 +12,4 @@ onnxruntime
 spaces
 torch
 numpy
+kernels
