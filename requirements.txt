@@ -11,3 +11,4 @@ onnxruntime
 spaces
 torch
 numpy
+kernels
