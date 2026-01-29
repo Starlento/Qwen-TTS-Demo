@@ -188,7 +188,7 @@ def generate_voice_design(text, language, voice_description, progress=gr.Progres
             language=language,
             instruct=voice_description.strip(),
             non_streaming_mode=True,
-            max_new_tokens=2048,
+            max_new_tokens=1024,
         )
         return (sr, wavs[0]), "Voice design generation completed successfully!"
     except Exception as e:
@@ -220,7 +220,7 @@ def generate_voice_clone(ref_audio, ref_text, target_text, language, use_xvector
             ref_audio=audio_tuple,
             ref_text=ref_text.strip() if ref_text else None,
             x_vector_only_mode=use_xvector_only,
-            max_new_tokens=2048,
+            max_new_tokens=1024,
         )
         return (sr, wavs[0]), "Voice clone generation completed successfully!"
     except Exception as e:
@@ -247,7 +247,7 @@ def generate_custom_voice(text, language, speaker, instruct, model_size, progres
             speaker=speaker.lower().replace(" ", "_"),
             instruct=instruct.strip() if instruct else None,
             non_streaming_mode=True,
-            max_new_tokens=2048,
+            max_new_tokens=1024,
         )
         return (sr, wavs[0]), "Generation completed successfully!"
     except Exception as e:
