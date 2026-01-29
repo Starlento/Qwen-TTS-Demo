@@ -184,10 +184,12 @@ def build_ui():
         gr.Markdown(
             """
 # Qwen3-TTS Demo
+
 A unified Text-to-Speech demo featuring three powerful modes:
 - **Voice Design**: Create custom voices using natural language descriptions
 - **Voice Clone (Base)**: Clone any voice from a reference audio
 - **TTS (CustomVoice)**: Generate speech with predefined speakers and optional style instructions
+
 Built with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) by Alibaba Qwen Team.
 """
         )
@@ -329,6 +331,7 @@ Built with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) by Alibaba Qwen Team
         gr.Markdown(
             """
 ---
+
 **Note**: This demo uses HuggingFace Spaces Zero GPU. Each generation has a time limit.
 For longer texts, please split them into smaller segments.
 """
