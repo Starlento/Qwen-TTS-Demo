@@ -286,6 +286,7 @@ class Qwen3TTSModel:
 
     def _merge_generate_kwargs(
         self,
+        non_streaming_mode: Optional[bool] = None,
         do_sample: Optional[bool] = None,
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
@@ -307,7 +308,7 @@ class Qwen3TTSModel:
           - Otherwise, fall back to the hard defaults.
 
         Args:
-            do_sample, top_k, top_p, temperature, repetition_penalty,
+            non_streaming_mode, do_sample, top_k, top_p, temperature, repetition_penalty,
             subtalker_dosample, subtalker_top_k, subtalker_top_p, subtalker_temperature, max_new_tokens:
                 Common generation parameters.
             **kwargs:
@@ -317,6 +318,7 @@ class Qwen3TTSModel:
             Dict[str, Any]: Final kwargs to pass into model.generate().
         """
         hard_defaults = dict(
+            non_streaming_mode=False,
             do_sample=True,
             top_k=50,
             top_p=1.0,
@@ -338,6 +340,7 @@ class Qwen3TTSModel:
 
         merged = dict(kwargs)
         merged.update(
+            non_streaming_mode=pick("non_streaming_mode", non_streaming_mode),
             do_sample=pick("do_sample", do_sample),
             top_k=pick("top_k", top_k),
             top_p=pick("top_p", top_p),
@@ -475,7 +478,6 @@ class Qwen3TTSModel:
         ref_text: Optional[Union[str, List[Optional[str]]]] = None,
         x_vector_only_mode: Union[bool, List[bool]] = False,
         voice_clone_prompt: Optional[Union[Dict[str, Any], List[VoiceClonePromptItem]]] = None,
-        non_streaming_mode: bool = False,
         **kwargs,
     ) -> Tuple[List[np.ndarray], int]:
         """
@@ -605,7 +607,6 @@ class Qwen3TTSModel:
             ref_ids=ref_ids,
             voice_clone_prompt=voice_clone_prompt_dict,
             languages=languages,
-            non_streaming_mode=non_streaming_mode,
             **gen_kwargs,
         )
 
@@ -639,7 +640,6 @@ class Qwen3TTSModel:
         text: Union[str, List[str]],
         instruct: Union[str, List[str]],
         language: Union[str, List[str]] = None,
-        non_streaming_mode: bool = True,
         **kwargs,
     ) -> Tuple[List[np.ndarray], int]:
         """
@@ -720,7 +720,6 @@ class Qwen3TTSModel:
             input_ids=input_ids,
             instruct_ids=instruct_ids,
             languages=languages,
-            non_streaming_mode=non_streaming_mode,
             **gen_kwargs,
         )
 
@@ -735,7 +734,6 @@ class Qwen3TTSModel:
         speaker: Union[str, List[str]],
         language: Union[str, List[str]] = None,
         instruct: Optional[Union[str, List[str]]] = None,
-        non_streaming_mode: bool = True,
         **kwargs,
     ) -> Tuple[List[np.ndarray], int]:
         """
@@ -831,7 +829,6 @@ class Qwen3TTSModel:
             instruct_ids=instruct_ids,
             languages=languages,
             speakers=speakers,
-            non_streaming_mode=non_streaming_mode,
             **gen_kwargs,
         )
 
