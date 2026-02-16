@@ -11,8 +11,8 @@ import torch
 from huggingface_hub import snapshot_download, login
 from qwen_tts import Qwen3TTSModel
 
-HF_TOKEN = os.environ.get('HF_TOKEN')
-login(token=HF_TOKEN)
+# HF_TOKEN = os.environ.get('HF_TOKEN')
+# login(token=HF_TOKEN)
 
 # Model size options
 MODEL_SIZES = ["0.6B", "1.7B"]
@@ -40,7 +40,7 @@ voice_design_model = Qwen3TTSModel.from_pretrained(
     get_model_path("VoiceDesign", "1.7B"),
     device_map="cuda",
     dtype=torch.bfloat16,
-    token=HF_TOKEN,
+    # token=HF_TOKEN,
     attn_implementation="kernels-community/flash-attn3",
 )
 
@@ -50,7 +50,7 @@ base_model_0_6b = Qwen3TTSModel.from_pretrained(
     get_model_path("Base", "0.6B"),
     device_map="cuda",
     dtype=torch.bfloat16,
-    token=HF_TOKEN,
+    # token=HF_TOKEN,
     attn_implementation="kernels-community/flash-attn3",
 )
 
@@ -59,7 +59,7 @@ base_model_1_7b = Qwen3TTSModel.from_pretrained(
     get_model_path("Base", "1.7B"),
     device_map="cuda",
     dtype=torch.bfloat16,
-    token=HF_TOKEN,
+    # token=HF_TOKEN,
     attn_implementation="kernels-community/flash-attn3",
 )
 
@@ -69,7 +69,7 @@ custom_voice_model_0_6b = Qwen3TTSModel.from_pretrained(
     get_model_path("CustomVoice", "0.6B"),
     device_map="cuda",
     dtype=torch.bfloat16,
-    token=HF_TOKEN,
+    # token=HF_TOKEN,
     attn_implementation="kernels-community/flash-attn3",
 )
 
@@ -78,7 +78,7 @@ custom_voice_model_1_7b = Qwen3TTSModel.from_pretrained(
     get_model_path("CustomVoice", "1.7B"),
     device_map="cuda",
     dtype=torch.bfloat16,
-    token=HF_TOKEN,
+    # token=HF_TOKEN,
     attn_implementation="kernels-community/flash-attn3",
 )
 
