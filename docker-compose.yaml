@@ -1,0 +1,29 @@
+services:
+  qwen3-tts:
+    image: starlento/qwen3-tts:latest
+    container_name: qwen3-tts
+    runtime: nvidia
+    command: python app_custom_voice.py --server-name 0.0.0.0 --server-port 7860
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_HOME=/models
+      # Optional: Uncomment if you need HuggingFace token for gated models
+      # - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      # Mount host models directory to container
+      - ~/models:/models
+      # Optional: Mount app directory for development
+      - ./:/app
+    ports:
+      - "7860:7860"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
